@@ -1,4 +1,4 @@
-name: Build Android APK
+﻿name: Build Android APK
 
 on:
   push:
@@ -42,58 +42,68 @@ jobs:
 
       - name: Configure Manifest for Fullscreen Landscape
         run: |
-          # Adiciona apenas a orientacao para evitar atributo duplicado no XML
+          # Define a orientacao como paisagem sem duplicar temas
           sed -i 's/android:name=".MainActivity"/android:name=".MainActivity" android:screenOrientation="sensorLandscape"/' android/app/src/main/AndroidManifest.xml
 
-      - name: Configure Styles for Edge-to-Edge and Notch
+      - name: Configure Styles
         run: |
-          # Adiciona configuracoes de tela cheia e notch ao estilo principal separadamente para nao quebrar o parse
+          # Forca o tema basico a aceitar tela cheia no XML
           sed -i '/<style name="AppTheme.NoActionBar"/a\        <item name="android:windowFullscreen">true</item>' android/app/src/main/res/values/styles.xml
-          sed -i '/<style name="AppTheme.NoActionBar"/a\        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>' android/app/src/main/res/values/styles.xml
-          sed -i '/<style name="AppTheme.NoActionBar"/a\        <item name="android:windowTranslucentNavigation">true</item>' android/app/src/main/res/values/styles.xml
-          sed -i '/<style name="AppTheme.NoActionBar"/a\        <item name="android:windowTranslucentStatus">true</item>' android/app/src/main/res/values/styles.xml
-          
-          # Repete para o Launch Theme (Splash)
           sed -i '/<style name="AppTheme.NoActionBarLaunch"/a\        <item name="android:windowFullscreen">true</item>' android/app/src/main/res/values/styles.xml
-          sed -i '/<style name="AppTheme.NoActionBarLaunch"/a\        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>' android/app/src/main/res/values/styles.xml
-          sed -i '/<style name="AppTheme.NoActionBarLaunch"/a\        <item name="android:windowTranslucentNavigation">true</item>' android/app/src/main/res/values/styles.xml
-          sed -i '/<style name="AppTheme.NoActionBarLaunch"/a\        <item name="android:windowTranslucentStatus">true</item>' android/app/src/main/res/values/styles.xml
 
-      - name: Rewrite MainActivity for True Immersive Mode
+      - name: Rewrite MainActivity for True Zombie Tsunami Immersive Mode
         run: |
-          cat << 'EOF' > android/app/src/main/java/com/polyshooter/game/MainActivity.java
-          package com.polyshooter.game;
+          # Encontra o arquivo original independentemente do ID do app do usuario
+          MAIN_ACTIVITY_PATH=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
+          
+          # Extrai o nome do pacote exato que o Capacitor gerou
+          PACKAGE_NAME=$(grep -oP '(?<=package ).*(?=;)' "$MAIN_ACTIVITY_PATH" | tr -d '\r')
+          
+          # Sobrescreve o arquivo com a configuracao IMMERSIVE_STICKY nativa
+          cat << EOF > "$MAIN_ACTIVITY_PATH"
+          package $PACKAGE_NAME;
 
           import android.os.Bundle;
           import android.view.View;
           import android.view.Window;
           import android.view.WindowManager;
+          import android.os.Build;
           import com.getcapacitor.BridgeActivity;
 
           public class MainActivity extends BridgeActivity {
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  setupImmersiveMode();
+                  setupImmersiveStickyMode();
+              }
+
+              @Override
+              public void onResume() {
+                  super.onResume();
+                  setupImmersiveStickyMode();
               }
 
               @Override
               public void onWindowFocusChanged(boolean hasFocus) {
                   super.onWindowFocusChanged(hasFocus);
                   if (hasFocus) {
-                      setupImmersiveMode();
+                      setupImmersiveStickyMode();
                   }
               }
 
-              private void setupImmersiveMode() {
+              private void setupImmersiveStickyMode() {
                   Window window = getWindow();
-                  // Forca o desenho sobre as areas das barras
-                  window.setFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
                   
-                  // Esconde os relogios, botoes e forca o layout imersivo
+                  // Libera a tela para invadir a area da camera (Notch) sem deixar borda branca
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                      window.getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+                  }
+                  
+                  // Modo Zombie Tsunami: Esconde botoes virtuais, relogio e bateria agressivamente.
+                  // Eles so aparecem se o usuario arrastar o dedo do canto da tela (IMMERSIVE_STICKY).
                   View decorView = window.getDecorView();
                   decorView.setSystemUiVisibility(
-                      View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                       | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                       | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                       | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
