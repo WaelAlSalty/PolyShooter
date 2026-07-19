@@ -44,9 +44,14 @@ jobs:
         run: |
           # Deixa o app deitado
           sed -i 's/android:name=".MainActivity"/android:name=".MainActivity" android:screenOrientation="landscape"/' android/app/src/main/AndroidManifest.xml
-          # Injeta a regra de Tela Cheia (Fullscreen) nos estilos do Android para sumir com a bateria/hora
+          
+          # Injeta a regra de Tela Cheia (Fullscreen)
           sed -i '/<style name="AppTheme.NoActionBar"/a\        <item name="android:windowFullscreen">true</item>' android/app/src/main/res/values/styles.xml
           sed -i '/<style name="AppTheme.NoActionBarLaunch"/a\        <item name="android:windowFullscreen">true</item>' android/app/src/main/res/values/styles.xml
+          
+          # Injeta a regra para o jogo invadir a area do Notch (Câmera) e tirar a borda lateral
+          sed -i '/<style name="AppTheme.NoActionBar"/a\        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>' android/app/src/main/res/values/styles.xml
+          sed -i '/<style name="AppTheme.NoActionBarLaunch"/a\        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>' android/app/src/main/res/values/styles.xml
 
       - name: Grant Execute Permission to Gradle
         run: chmod +x ./android/gradlew
