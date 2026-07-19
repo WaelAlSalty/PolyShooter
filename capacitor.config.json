@@ -1,0 +1,6 @@
+{
+  "appId": "com.polyshooter.game",
+  "appName": "PolyShooter",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

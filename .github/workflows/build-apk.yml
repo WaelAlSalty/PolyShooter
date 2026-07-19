@@ -30,10 +30,14 @@ jobs:
           npm install
           npm run build
 
-      - name: Sync Capacitor with Android
+      - name: Install Capacitor
         run: |
           npm install @capacitor/core @capacitor/cli @capacitor/android
-          npx cap add android || echo "Android platform already exists"
+
+      - name: Sync Capacitor with Android
+        run: |
+          rm -rf android
+          npx cap add android
           npx cap sync android
 
       - name: Grant Execute Permission to Gradle
