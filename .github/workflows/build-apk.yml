@@ -40,21 +40,27 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      - name: Force Landscape & Notch Fullscreen
+      - name: Configure Android Fullscreen & Immersive Mode
         run: |
           sed -i 's/android:name=".MainActivity"/android:name=".MainActivity" android:screenOrientation="landscape"/' android/app/src/main/AndroidManifest.xml
+          
           sed -i '/<style name="AppTheme.NoActionBar"/a\        <item name="android:windowFullscreen">true</item>' android/app/src/main/res/values/styles.xml
-          sed -i '/<style name="AppTheme.NoActionBarLaunch"/a\        <item name="android:windowFullscreen">true</item>' android/app/src/main/res/values/styles.xml
           sed -i '/<style name="AppTheme.NoActionBar"/a\        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>' android/app/src/main/res/values/styles.xml
+          sed -i '/<style name="AppTheme.NoActionBar"/a\        <item name="android:windowTranslucentNavigation">true</item>' android/app/src/main/res/values/styles.xml
+          
+          sed -i '/<style name="AppTheme.NoActionBarLaunch"/a\        <item name="android:windowFullscreen">true</item>' android/app/src/main/res/values/styles.xml
           sed -i '/<style name="AppTheme.NoActionBarLaunch"/a\        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>' android/app/src/main/res/values/styles.xml
+          sed -i '/<style name="AppTheme.NoActionBarLaunch"/a\        <item name="android:windowTranslucentNavigation">true</item>' android/app/src/main/res/values/styles.xml
 
-      - name: Force True Immersive Mode (Hide Status Bar)
+      - name: Rewrite MainActivity for True Immersive Mode
         run: |
           cat << 'EOF' > android/app/src/main/java/com/polyshooter/game/MainActivity.java
           package com.polyshooter.game;
 
           import android.os.Bundle;
           import android.view.View;
+          import android.view.Window;
+          import android.view.WindowManager;
           import com.getcapacitor.BridgeActivity;
 
           public class MainActivity extends BridgeActivity {
@@ -65,13 +71,17 @@ jobs:
               }
 
               @Override
-              public void onResume() {
-                  super.onResume();
-                  hideSystemUI();
+              public void onWindowFocusChanged(boolean hasFocus) {
+                  super.onWindowFocusChanged(hasFocus);
+                  if (hasFocus) {
+                      hideSystemUI();
+                  }
               }
 
               private void hideSystemUI() {
-                  View decorView = getWindow().getDecorView();
+                  Window window = getWindow();
+                  window.setFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
+                  View decorView = window.getDecorView();
                   decorView.setSystemUiVisibility(
                       View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                       | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
