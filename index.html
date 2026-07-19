@@ -1,10 +1,30 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Game</title>
-  </head>
+      <style>
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+        }
+        html, body {
+            width: 100vw !important;
+            height: 100vh !important;
+            overflow: hidden !important;
+            background-color: #000000 !important;
+            touch-action: none;
+        }
+        canvas {
+            display: block !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            outline: none !important;
+        }
+    </style>
+</head>
   <body>
     <div id="app"></div> <!-- O resto deve estar vazio! -->
     <script type="module" src="/src/main.ts"></script>
