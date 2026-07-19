@@ -40,6 +40,10 @@ jobs:
           npx cap add android
           npx cap sync android
 
+      - name: Force Landscape Orientation
+        run: |
+          sed -i 's/android:name=".MainActivity"/android:name=".MainActivity" android:screenOrientation="landscape"/' android/app/src/main/AndroidManifest.xml
+
       - name: Grant Execute Permission to Gradle
         run: chmod +x ./android/gradlew
 
