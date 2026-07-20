@@ -9,8 +9,11 @@ import { ParticleSystem } from '../systems/ParticleSystem';
 import { CollectibleManager } from '../systems/CollectibleManager';
 import { AudioManager } from '../systems/AudioManager';
 import { Crosshair } from '../ui/Crosshair';
+import { UndergroundShelter } from '../world/UndergroundShelter';
 
 export class Game {
+    private static activeGame: Game | null = null;
+
     private scene: THREE.Scene;
     private camera: THREE.PerspectiveCamera;
     private renderer: THREE.WebGLRenderer;
@@ -23,12 +26,22 @@ export class Game {
     private collectibleManager: CollectibleManager;
     private audioManager: AudioManager;
     private crosshair: Crosshair;
+    private shelter: UndergroundShelter;
+    
     private lastTime: number;
     private isGameOver: boolean = false;
     private score: number = 0;
     private highScore: number = 0;
     
-    // Variaveis do Modelo 3D e Animacoes
+    private isPlayerHidden: boolean = false;
+    
+    // Snappy Door / Portal Transition State Variables
+    private isInBunker: boolean = false;
+    private doorCooldown: number = 0;
+    private isDoorTransitioning: boolean = false;
+    private doorTransitionTimer: number = 0;
+    
+    // 3D Model and Animation Variables
     private playerModel?: THREE.Group;
     private animationMixer?: THREE.AnimationMixer;
     private animations: THREE.AnimationClip[] = [];
@@ -38,6 +51,11 @@ export class Game {
     private attackTimer: number = 0;
 
     constructor() {
+        if (Game.activeGame) {
+            Game.activeGame.destroy();
+        }
+        Game.activeGame = this;
+
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x87ceeb); 
         this.scene.fog = new THREE.Fog(0x87ceeb, 20, 80); 
@@ -55,6 +73,10 @@ export class Game {
 
         this.inputManager = new InputManager();
         this.world = new World(this.scene);
+
+        this.shelter = new UndergroundShelter(this.scene, new THREE.Vector3(0, 0, 0));
+        this.world.colliders.push(...this.shelter.colliders);
+
         this.particleSystem = new ParticleSystem(this.scene);
         this.collectibleManager = new CollectibleManager(this.scene);
         this.audioManager = new AudioManager();
@@ -77,7 +99,6 @@ export class Game {
             () => this.onGameOver(),
             () => {
                 this.audioManager.playShoot();
-                // ATIVAMOS A ANIMAÇÃO AQUI QUANDO O JOGADOR ATIRA!
                 this.triggerAttackAnimation();
             }
         );
@@ -93,8 +114,17 @@ export class Game {
         );
 
         this.lastTime = performance.now();
-        
         this.loadPlayerModel();
+    }
+
+    private destroy(): void {
+        if (this.renderer) {
+            this.renderer.dispose();
+            this.renderer.forceContextLoss();
+            if (this.renderer.domElement && this.renderer.domElement.parentNode) {
+                this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
+            }
+        }
     }
 
     private loadPlayerModel() {
@@ -116,7 +146,7 @@ export class Game {
 
                 const animations = gltf.animations;
                 if (animations && animations.length > 0) {
-                    this.animations = animations; // Guarda na memória
+                    this.animations = animations;
                     this.animationMixer = new THREE.AnimationMixer(this.playerModel);
                     
                     let clipToPlay = animations.find(a => a.name === 'Idle');
@@ -127,12 +157,9 @@ export class Game {
                     this.currentAction = this.animationMixer.clipAction(clipToPlay);
                     this.currentAction.play();
                 }
-                console.log('Wizard loaded successfully!');
             },
-            (progress) => {},
-            (error) => {
-                console.error('Error loading the 3D character:', error);
-            }
+            undefined,
+            (error) => console.error('Error loading the 3D character:', error)
         );
     }
 
@@ -159,12 +186,11 @@ export class Game {
     private triggerAttackAnimation() {
         if (!this.animationMixer || this.animations.length === 0) return;
         
-        // Pega a animação 'Spell1' (ou 'Staff_Attack' se não tiver Spell1)
         const attackClip = this.animations.find(a => a.name === 'Spell1' || a.name === 'Staff_Attack');
         if (!attackClip) return;
 
         this.isAttacking = true;
-        this.attackTimer = 0.4; // O ataque ignora Idle/Run por 400ms
+        this.attackTimer = 0.4; 
 
         if (this.attackAction) {
             this.attackAction.stop();
@@ -198,6 +224,8 @@ export class Game {
     private startGame(): void {
         this.isGameOver = false;
         this.score = 0;
+        this.isInBunker = false;
+        this.isDoorTransitioning = false;
         this.player.reset();
         this.enemyManager.reset();
         this.particleSystem.reset();
@@ -233,6 +261,8 @@ export class Game {
     }
 
     private animate(): void {
+        if (Game.activeGame !== this) return;
+
         requestAnimationFrame(() => this.animate());
 
         const currentTime = performance.now();
@@ -247,33 +277,93 @@ export class Game {
         
         this.camera.rotation.y -= cameraDelta.x * 0.003;
         this.camera.rotation.x -= cameraDelta.y * 0.003;
-        
         this.camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.camera.rotation.x));
         this.camera.rotation.z = 0;
 
         if (!this.isGameOver) {
-            this.player.update(
-                deltaTime, 
-                this.inputManager.getMovementX(), 
-                this.inputManager.getMovementZ(), 
-                this.inputManager.consumeJump(),
-                this.inputManager.getShooting(),
-                this.inputManager.consumeDash(),
-                this.camera.rotation.y,
-                this.world.colliders
-            );
+            
+            if (!this.isDoorTransitioning) {
+                this.player.update(
+                    deltaTime, 
+                    this.inputManager.getMovementX(), 
+                    this.inputManager.getMovementZ(), 
+                    this.inputManager.consumeJump(),
+                    this.inputManager.getShooting(),
+                    this.inputManager.consumeDash(),
+                    this.camera.rotation.y,
+                    this.world.colliders
+                );
+            }
+
+            this.shelter.update(deltaTime);
+
+            // --- SNAPPY DOOR / PORTAL MECHANIC ---
+            if (this.doorCooldown > 0) {
+                this.doorCooldown -= deltaTime;
+            }
+
+            if (this.isDoorTransitioning) {
+                this.doorTransitionTimer += deltaTime;
+                if (this.doorTransitionTimer >= 0.25) { // Snappy 0.25s transition feel
+                    this.isDoorTransitioning = false;
+                    this.doorCooldown = 1.0;
+                }
+            } else {
+                const playerPos = this.player.getPosition();
+                const portalY = this.isInBunker ? (this.shelter.bunkerYLevel + 0.2) : 0.2;
+                const portalPos = new THREE.Vector3(0, portalY, 2);
+
+                if (this.doorCooldown <= 0) {
+                    const distanceToPortal = new THREE.Vector2(playerPos.x - portalPos.x, playerPos.z - portalPos.z).length();
+                    
+                    if (distanceToPortal < 2.0 && Math.abs(playerPos.y - portalPos.y) < 2.5) {
+                        this.isInBunker = !this.isInBunker;
+                        this.isDoorTransitioning = true;
+                        this.doorTransitionTimer = 0;
+                        
+                        const destinationY = this.isInBunker ? (this.shelter.bunkerYLevel + 0.2) : 0.2;
+                        playerPos.set(0, destinationY, 2);
+                        
+                        this.audioManager.playShoot();
+                    }
+                }
+            }
+
+            // --- DYNAMIC ENVIRONMENT (FOG & SKY TRANSITION) ---
+            const playerY = this.player.getPosition().y;
+            const depthRatio = Math.max(0, Math.min(1, -playerY / Math.abs(this.shelter.bunkerYLevel)));
+            
+            const surfaceColor = new THREE.Color(0x87ceeb); 
+            const bunkerColor = new THREE.Color(0x020202);  
+            const currentColor = surfaceColor.clone().lerp(bunkerColor, depthRatio);
+            
+            this.scene.background = currentColor;
+            if (this.scene.fog instanceof THREE.Fog) {
+                this.scene.fog.color = currentColor;
+                this.scene.fog.near = 20 - (depthRatio * 15); 
+                this.scene.fog.far = 80 - (depthRatio * 50);  
+            }
+
+            // --- STATE TRACKING LOG SYSTEM (STEALTH ZONE) ---
+            const currentlyInside = this.shelter.stealthBox.containsPoint(this.player.getPosition()) || this.isInBunker;
+
+            if (currentlyInside && !this.isPlayerHidden) {
+                console.log("🟢 [STATE CHANGE] Wizard is underground! Invisible to enemies.");
+                this.isPlayerHidden = true; 
+            } else if (!currentlyInside && this.isPlayerHidden) {
+                console.log("🔴 [STATE CHANGE] Wizard RETURNED to the surface! Enemies are searching...");
+                this.isPlayerHidden = false; 
+            }
             
             if (this.playerModel) {
-                const playerPos = this.player.getPosition();
-                this.playerModel.position.set(playerPos.x, playerPos.y - 1, playerPos.z);
+                const currentWizardPos = this.player.getPosition();
+                this.playerModel.position.set(currentWizardPos.x, currentWizardPos.y - 1, currentWizardPos.z);
                 this.playerModel.rotation.y = this.camera.rotation.y + Math.PI; 
 
-                // --- SISTEMA INTELIGENTE DE ANIMAÇÃO ---
                 if (this.isAttacking) {
                     this.attackTimer -= deltaTime;
                     if (this.attackTimer <= 0) {
                         this.isAttacking = false;
-                        // Acabou o ataque, volta pra Idle ou Run suavemente
                         if (this.currentAction && this.attackAction) {
                             this.currentAction.reset().play();
                             this.currentAction.crossFadeFrom(this.attackAction, 0.2, true);
@@ -300,6 +390,7 @@ export class Game {
             this.enemyManager.update(
                 deltaTime, 
                 this.player.getPosition(), 
+                this.isPlayerHidden, 
                 (amount) => {
                     this.player.takeDamage(amount);
                     this.audioManager.playDamage();
