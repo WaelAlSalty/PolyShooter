@@ -40,15 +40,15 @@ export class Player {
         private onDie: () => void,
         private onShoot: () => void
     ) {
+        // Hitbox principal (invisivel)
         const geo = new THREE.BoxGeometry(1, 2, 1);
         const mat = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
         this.mesh = new THREE.Mesh(geo, mat);
-        this.mesh.visible = false; // <-- Hitbox invisivel
         this.mesh.position.y = 1;
-        this.mesh.castShadow = true;
-        this.mesh.receiveShadow = true;
+        this.mesh.visible = false; 
         this.scene.add(this.mesh);
 
+        // Escudo de protecao (Buff)
         const shieldGeo = new THREE.SphereGeometry(1.5, 16, 16);
         const shieldMat = new THREE.MeshStandardMaterial({ 
             color: 0x0088ff, 
@@ -60,20 +60,19 @@ export class Player {
         this.shieldMesh.visible = false;
         this.mesh.add(this.shieldMesh);
 
+        // Arma antiga (tambem invisivel)
         this.gunGroup = new THREE.Group();
-        this.gunGroup.visible = false; // <-- Arma velha invisivel
+        this.gunGroup.visible = false;
         
         const barrelGeo = new THREE.BoxGeometry(0.2, 0.2, 0.8);
         const barrelMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
         const barrel = new THREE.Mesh(barrelGeo, barrelMat);
         barrel.position.set(0, 0, 0.4);
-        barrel.castShadow = true;
         
         const gripGeo = new THREE.BoxGeometry(0.2, 0.4, 0.2);
         const gripMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
         const grip = new THREE.Mesh(gripGeo, gripMat);
         grip.position.set(0, -0.2, 0.1);
-        grip.castShadow = true;
 
         this.gunGroup.add(barrel);
         this.gunGroup.add(grip);
@@ -173,6 +172,13 @@ export class Player {
         for (let i = this.bullets.length - 1; i >= 0; i--) {
             const b = this.bullets[i];
             b.mesh.position.addScaledVector(b.velocity, dt);
+            
+            // Faz a aura pulsar levemente enquanto o tiro viaja (Efeito Especial)
+            if (b.mesh.children.length > 0) {
+                const aura = b.mesh.children[0];
+                aura.scale.setScalar(1.0 + Math.sin(b.life * 15) * 0.15);
+            }
+
             b.life -= dt;
             if (b.life <= 0) {
                 this.destroyBullet(i);
@@ -183,13 +189,32 @@ export class Player {
     private fireBullet() {
         this.onShoot();
         
-        const createBullet = (angleOffset: number) => {
-            const geo = new THREE.SphereGeometry(0.15, 8, 8);
-            const mat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-            const mesh = new THREE.Mesh(geo, mat);
+        const createBullet = (angleOffset: number, weaponLvl: number) => {
+            // Define a cor magica baseada no nivel da arma
+            let auraColor = 0x00d4ff; // Nivel 1: Ciano
+            if (weaponLvl === 2) auraColor = 0xaa00ff; // Nivel 2: Roxo
+            if (weaponLvl >= 3) auraColor = 0xff0055; // Nivel 3: Rosa Destrutivo
+
+            // Nucleo do tiro (branco brilhante)
+            const coreGeo = new THREE.SphereGeometry(0.12, 8, 8);
+            const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const mesh = new THREE.Mesh(coreGeo, coreMat);
             
-            const spawnPos = new THREE.Vector3(0, 0, 0.8);
-            spawnPos.applyMatrix4(this.gunGroup.matrixWorld);
+            // Aura magica (AdditiveBlending para brilhar como neon)
+            const auraGeo = new THREE.SphereGeometry(0.35, 16, 16);
+            const auraMat = new THREE.MeshBasicMaterial({ 
+                color: auraColor, 
+                transparent: true, 
+                opacity: 0.7,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false 
+            });
+            const aura = new THREE.Mesh(auraGeo, auraMat);
+            mesh.add(aura);
+            
+            // Posiciona saindo mais da direita e de cima (na direcao do cajado)
+            const spawnPos = new THREE.Vector3(0.4, 0.5, 1.0);
+            spawnPos.applyMatrix4(this.mesh.matrixWorld);
             mesh.position.copy(spawnPos);
             
             const direction = new THREE.Vector3(0, 0, -1);
@@ -197,21 +222,22 @@ export class Player {
             direction.applyQuaternion(this.mesh.quaternion);
             direction.normalize();
             
-            const velocity = direction.multiplyScalar(30);
+            // Velocidade do projetil magico (mais rapido que o padrao)
+            const velocity = direction.multiplyScalar(40);
             
             this.scene.add(mesh);
             this.bullets.push({ mesh, velocity, life: 2.0 });
         };
 
         if (this.weaponLevel === 1) {
-            createBullet(0);
+            createBullet(0, 1);
         } else if (this.weaponLevel === 2) {
-            createBullet(-0.1);
-            createBullet(0.1);
+            createBullet(-0.1, 2);
+            createBullet(0.1, 2);
         } else {
-            createBullet(0);
-            createBullet(-0.15);
-            createBullet(0.15);
+            createBullet(0, 3);
+            createBullet(-0.15, 3);
+            createBullet(0.15, 3);
         }
     }
 
@@ -253,8 +279,20 @@ export class Player {
     public destroyBullet(index: number) {
         const b = this.bullets[index];
         this.scene.remove(b.mesh);
-        (b.mesh.material as THREE.Material).dispose();
-        b.mesh.geometry.dispose();
+        
+        // Limpa a memoria do nucleo e da aura magica ao destruir o tiro
+        b.mesh.traverse((child) => {
+            if ((child as THREE.Mesh).isMesh) {
+                const m = child as THREE.Mesh;
+                m.geometry.dispose();
+                if (Array.isArray(m.material)) {
+                    m.material.forEach(mat => mat.dispose());
+                } else {
+                    m.material.dispose();
+                }
+            }
+        });
+        
         this.bullets.splice(index, 1);
     }
 
@@ -274,4 +312,3 @@ export class Player {
         }
     }
 }
-
