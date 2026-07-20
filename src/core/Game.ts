@@ -43,7 +43,7 @@ export class Game {
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.shadowMap.enabled = true; 
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.renderer.shadowMap.type = THREE.PCFShadowMap;
         document.body.appendChild(this.renderer.domElement);
 
         this.setupLighting();
@@ -92,7 +92,7 @@ export class Game {
     private loadPlayerModel() {
         const gltfLoader = new GLTFLoader();
         gltfLoader.load(
-            'wizard.gltf', // Atualizado para o nome do arquivo que voce usou
+            'Wizard.gltf', // Atualizado para o nome do arquivo que voce usou
             (gltf) => {
                 this.playerModel = gltf.scene;
                 this.playerModel.scale.set(1, 1, 1);
@@ -328,3 +328,4 @@ export class Game {
         this.renderer.render(this.scene, this.camera);
     }
 }
+
