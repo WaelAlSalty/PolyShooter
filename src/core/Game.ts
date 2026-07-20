@@ -92,12 +92,11 @@ export class Game {
     private loadPlayerModel() {
         const gltfLoader = new GLTFLoader();
         gltfLoader.load(
-            'model.gltf', // Ele vai procurar isso dentro da pasta public/
+            'wizard.gltf', // Atualizado para o nome do arquivo que voce usou
             (gltf) => {
                 this.playerModel = gltf.scene;
                 this.playerModel.scale.set(1, 1, 1);
                 
-                // Faz o modelo projetar e receber sombras
                 this.playerModel.traverse((child) => {
                     if ((child as THREE.Mesh).isMesh) {
                         child.castShadow = true;
@@ -110,14 +109,25 @@ export class Game {
                 const animations = gltf.animations;
                 if (animations && animations.length > 0) {
                     this.animationMixer = new THREE.AnimationMixer(this.playerModel);
-                    // Pega a primeira animacao por padrao (geralmente Idle)
-                    const idleAction = this.animationMixer.clipAction(animations[0]);
-                    idleAction.play();
+                    
+                    // Imprime os nomes de todas as animacoes no Console (F12)
+                    console.log('Animações disponíveis:', animations.map(a => a.name));
+
+                    // Procura automaticamente pela animacao "Idle" (Ficar parado respirando)
+                    let clipToPlay = animations.find(a => a.name.toLowerCase().includes('idle'));
+                    
+                    // Se por acaso nao existir "Idle", volta a pegar a primeira
+                    if (!clipToPlay) {
+                        clipToPlay = animations[0];
+                    }
+
+                    const action = this.animationMixer.clipAction(clipToPlay);
+                    action.play();
                 }
-                console.log('3D Character loaded successfully!');
+                console.log('Wizard loaded successfully!');
             },
             (progress) => {
-                console.log('Loading progress: ' + ((progress.loaded / progress.total) * 100) + '%');
+                // Removemos o console de progresso para limpar o console
             },
             (error) => {
                 console.error('Error loading the 3D character:', error);
@@ -209,7 +219,6 @@ export class Game {
         const deltaTime = (currentTime - this.lastTime) / 1000;
         this.lastTime = currentTime;
         
-        // Atualiza a animacao do personagem 3D
         if (this.animationMixer) {
             this.animationMixer.update(deltaTime);
         }
@@ -234,12 +243,9 @@ export class Game {
                 this.world.colliders
             );
             
-            // Faz o modelo 3D seguir o player de forma invisivel
             if (this.playerModel) {
                 const playerPos = this.player.getPosition();
-                // Baixamos Y em 1 para o pe bater no chao, caso seu player seja uma capsula centralizada
                 this.playerModel.position.set(playerPos.x, playerPos.y - 1, playerPos.z);
-                // Gira o boneco de costas pra camera (+ PI para modelos que nascem de frente)
                 this.playerModel.rotation.y = this.camera.rotation.y + Math.PI; 
             }
 
