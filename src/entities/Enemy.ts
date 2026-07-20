@@ -1,5 +1,5 @@
 ﻿import * as THREE from 'three';
-import { SkeletonUtils } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 export type EnemyType = 'normal' | 'fast' | 'boss';
 
@@ -122,3 +122,4 @@ export class Enemy {
         }
     }
 }
+
