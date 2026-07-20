@@ -1,4 +1,5 @@
-import * as THREE from 'three';
+﻿import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Enemy } from '../entities/Enemy';
 import type { EnemyType } from '../entities/Enemy';
 
@@ -11,10 +12,38 @@ export class EnemyManager {
     private enemiesPerWave: number = 10;
     private isBossActive: boolean = false;
 
+    // Cache do Modelo 3D para não pesar a memória
+    private baseEnemyModel?: THREE.Group;
+    private baseAnimations?: THREE.AnimationClip[];
+
     constructor(
         private scene: THREE.Scene,
         private onEnemyKilled: (type: EnemyType) => void
-    ) {}
+    ) {
+        this.loadAlienModel();
+    }
+
+    private loadAlienModel() {
+        const loader = new GLTFLoader();
+        // NOME DO ARQUIVO AQUI! (Letra maiúscula importa)
+        loader.load(
+            'Alien.gltf', 
+            (gltf) => {
+                this.baseEnemyModel = gltf.scene;
+                this.baseAnimations = gltf.animations;
+                
+                this.baseEnemyModel.traverse((child) => {
+                    if ((child as THREE.Mesh).isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+                console.log('Alien carregado na memoria com sucesso!');
+            },
+            undefined,
+            (error) => console.error('Erro ao carregar o Alien:', error)
+        );
+    }
 
     public getWave(): number {
         return this.currentWave;
@@ -65,7 +94,8 @@ export class EnemyManager {
         );
         
         const type: EnemyType = Math.random() < 0.3 ? 'fast' : 'normal';
-        const enemy = new Enemy(this.scene, spawnPos, type);
+        // Passamos o modelo carregado para o clone
+        const enemy = new Enemy(this.scene, spawnPos, type, this.baseEnemyModel, this.baseAnimations);
         this.enemies.push(enemy);
     }
 
@@ -80,7 +110,7 @@ export class EnemyManager {
             playerPosition.z + Math.sin(angle) * distance
         );
         
-        const boss = new Enemy(this.scene, spawnPos, 'boss');
+        const boss = new Enemy(this.scene, spawnPos, 'boss', this.baseEnemyModel, this.baseAnimations);
         boss.hp += (this.currentWave - 1) * 50; 
         this.enemies.push(boss);
     }
@@ -96,7 +126,7 @@ export class EnemyManager {
         this.enemies.forEach(e => {
             e.hp = 0;
             e.isDead = true;
-            this.scene.remove(e.mesh);
+            e.scene.remove(e.mesh);
         });
         this.enemies = [];
         this.spawnTimer = 0;
