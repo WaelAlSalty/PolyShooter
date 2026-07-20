@@ -1,0 +1,16 @@
+﻿// 1. COLOQUE ISSO NO TOPO DO SEU ARQUIVO PRINCIPAL (ONDE FICAM OS IMPORTS)
+import { SafeZone } from './SafeZone';
+
+// 2. COLOQUE ISSO ONDE VOCÊ CRIA SEUS OBJETOS DA CENA (ANTES DO LOOP DE ANIMAÇÃO)
+const myShelter = new SafeZone(new THREE.Vector3(0, 0, 0), 10, 5, 10);
+scene.add(myShelter.getMesh());
+
+// 3. COLOQUE ISSO DENTRO DA SUA FUNÇÃO DE LOOP (O requestAnimationFrame)
+// ATENÇÃO: Se a variável do seu personagem não for 'player', troque ali embaixo (ex: mago.position)
+myShelter.update(player.position);
+
+if (myShelter.checkStealthStatus()) {
+    console.log('Player is INSIDE the shelter! Safe zone active.');
+} else {
+    console.log('Player is OUTSIDE. The green monster is searching...');
+}

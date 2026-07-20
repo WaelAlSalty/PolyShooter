@@ -12,9 +12,12 @@ export class EnemyManager {
     private enemiesPerWave: number = 10;
     private isBossActive: boolean = false;
 
-    // Cache do Modelo 3D para não pesar a memória
+    // 3D Model Cache
     private baseEnemyModel?: THREE.Group;
     private baseAnimations?: THREE.AnimationClip[];
+
+    // Wander mechanic state for when the player is hidden
+    private wanderData: Map<Enemy, { target: THREE.Vector3, timer: number }> = new Map();
 
     constructor(
         private scene: THREE.Scene,
@@ -25,7 +28,6 @@ export class EnemyManager {
 
     private loadAlienModel() {
         const loader = new GLTFLoader();
-        // NOME DO ARQUIVO AQUI! (Letra maiúscula importa)
         loader.load(
             'Alien.gltf', 
             (gltf) => {
@@ -38,10 +40,10 @@ export class EnemyManager {
                         child.receiveShadow = true;
                     }
                 });
-                console.log('Alien carregado na memoria com sucesso!');
+                console.log('Alien loaded into memory successfully!');
             },
             undefined,
-            (error) => console.error('Erro ao carregar o Alien:', error)
+            (error) => console.error('Error loading Alien:', error)
         );
     }
 
@@ -49,7 +51,7 @@ export class EnemyManager {
         return this.currentWave;
     }
 
-    public update(dt: number, playerPosition: THREE.Vector3, playerTakeDamage: (amount: number) => void) {
+    public update(dt: number, playerPosition: THREE.Vector3, isPlayerHidden: boolean, playerTakeDamage: (amount: number) => void) {
         this.spawnTimer += dt;
         
         if (!this.isBossActive && this.spawnTimer > this.spawnInterval) {
@@ -59,15 +61,49 @@ export class EnemyManager {
 
         for (let i = this.enemies.length - 1; i >= 0; i--) {
             const enemy = this.enemies[i];
-            enemy.update(dt, playerPosition);
+            
+            let targetPosition: THREE.Vector3;
 
-            if (enemy.mesh.position.distanceTo(playerPosition) < enemy.collisionRadius && enemy.attackCooldown <= 0) {
+            // WANDER MECHANIC: If player is hidden, enemies pick random points to patrol
+            if (isPlayerHidden) {
+                let wander = this.wanderData.get(enemy);
+                
+                // If the enemy doesn't have a wander target or the timer expired, create a new one
+                if (!wander || wander.timer <= 0) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = 5 + Math.random() * 10; // Walk 5 to 15 units away
+                    const newTarget = new THREE.Vector3(
+                        enemy.mesh.position.x + Math.cos(angle) * distance,
+                        enemy.mesh.position.y,
+                        enemy.mesh.position.z + Math.sin(angle) * distance
+                    );
+                    
+                    wander = { target: newTarget, timer: 2 + Math.random() * 3 }; // Wander for 2 to 5 seconds
+                    this.wanderData.set(enemy, wander);
+                }
+                
+                wander.timer -= dt;
+                targetPosition = wander.target;
+            } else {
+                targetPosition = playerPosition;
+                
+                // Clean up wander data if player is visible again
+                if (this.wanderData.has(enemy)) {
+                    this.wanderData.delete(enemy);
+                }
+            }
+
+            enemy.update(dt, targetPosition);
+
+            // STEALTH LOGIC: Enemies cannot deal damage if player is hidden
+            if (!isPlayerHidden && enemy.mesh.position.distanceTo(playerPosition) < enemy.collisionRadius && enemy.attackCooldown <= 0) {
                 playerTakeDamage(10 * enemy.damageMultiplier); 
                 enemy.attackCooldown = 1.0; 
             }
 
             if (enemy.isDead) {
                 this.onEnemyKilled(enemy.type);
+                this.wanderData.delete(enemy); // Prevent memory leaks
                 
                 if (enemy.type === 'boss') {
                     this.isBossActive = false;
@@ -94,7 +130,6 @@ export class EnemyManager {
         );
         
         const type: EnemyType = Math.random() < 0.3 ? 'fast' : 'normal';
-        // Passamos o modelo carregado para o clone
         const enemy = new Enemy(this.scene, spawnPos, type, this.baseEnemyModel, this.baseAnimations);
         this.enemies.push(enemy);
     }
@@ -129,6 +164,7 @@ export class EnemyManager {
             e.scene.remove(e.mesh);
         });
         this.enemies = [];
+        this.wanderData.clear();
         this.spawnTimer = 0;
         this.spawnInterval = 2.0;
         this.currentWave = 1;
