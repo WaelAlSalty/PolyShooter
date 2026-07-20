@@ -28,9 +28,14 @@ export class Game {
     private score: number = 0;
     private highScore: number = 0;
     
-    // Variaveis do Modelo 3D
+    // Variaveis do Modelo 3D e Animacoes
     private playerModel?: THREE.Group;
     private animationMixer?: THREE.AnimationMixer;
+    private animations: THREE.AnimationClip[] = [];
+    private currentAction?: THREE.AnimationAction;
+    private attackAction?: THREE.AnimationAction;
+    private isAttacking: boolean = false;
+    private attackTimer: number = 0;
 
     constructor() {
         this.scene = new THREE.Scene();
@@ -70,7 +75,11 @@ export class Game {
             this.scene, 
             (hp, maxHp) => this.updateUI(hp, maxHp),
             () => this.onGameOver(),
-            () => this.audioManager.playShoot()
+            () => {
+                this.audioManager.playShoot();
+                // ATIVAMOS A ANIMAÇÃO AQUI QUANDO O JOGADOR ATIRA!
+                this.triggerAttackAnimation();
+            }
         );
 
         this.enemyManager = new EnemyManager(
@@ -85,14 +94,13 @@ export class Game {
 
         this.lastTime = performance.now();
         
-        // Inicia o carregamento do personagem 3D
         this.loadPlayerModel();
     }
 
     private loadPlayerModel() {
         const gltfLoader = new GLTFLoader();
         gltfLoader.load(
-            'Wizard.gltf', // Atualizado para o nome do arquivo que voce usou
+            'Wizard.gltf', 
             (gltf) => {
                 this.playerModel = gltf.scene;
                 this.playerModel.scale.set(1, 1, 1);
@@ -108,27 +116,20 @@ export class Game {
 
                 const animations = gltf.animations;
                 if (animations && animations.length > 0) {
+                    this.animations = animations; // Guarda na memória
                     this.animationMixer = new THREE.AnimationMixer(this.playerModel);
                     
-                    // Imprime os nomes de todas as animacoes no Console (F12)
-                    console.log('Animações disponíveis:', animations.map(a => a.name));
-
-                    // Procura automaticamente pela animacao "Idle" (Ficar parado respirando)
-                    let clipToPlay = animations.find(a => a.name.toLowerCase().includes('idle'));
-                    
-                    // Se por acaso nao existir "Idle", volta a pegar a primeira
+                    let clipToPlay = animations.find(a => a.name === 'Idle');
                     if (!clipToPlay) {
                         clipToPlay = animations[0];
                     }
 
-                    const action = this.animationMixer.clipAction(clipToPlay);
-                    action.play();
+                    this.currentAction = this.animationMixer.clipAction(clipToPlay);
+                    this.currentAction.play();
                 }
                 console.log('Wizard loaded successfully!');
             },
-            (progress) => {
-                // Removemos o console de progresso para limpar o console
-            },
+            (progress) => {},
             (error) => {
                 console.error('Error loading the 3D character:', error);
             }
@@ -155,6 +156,31 @@ export class Game {
         this.scene.add(dirLight);
     }
 
+    private triggerAttackAnimation() {
+        if (!this.animationMixer || this.animations.length === 0) return;
+        
+        // Pega a animação 'Spell1' (ou 'Staff_Attack' se não tiver Spell1)
+        const attackClip = this.animations.find(a => a.name === 'Spell1' || a.name === 'Staff_Attack');
+        if (!attackClip) return;
+
+        this.isAttacking = true;
+        this.attackTimer = 0.4; // O ataque ignora Idle/Run por 400ms
+
+        if (this.attackAction) {
+            this.attackAction.stop();
+        }
+
+        this.attackAction = this.animationMixer.clipAction(attackClip);
+        this.attackAction.reset();
+        this.attackAction.setLoop(THREE.LoopOnce, 1);
+        this.attackAction.clampWhenFinished = true;
+        this.attackAction.play();
+
+        if (this.currentAction) {
+            this.attackAction.crossFadeFrom(this.currentAction, 0.1, true);
+        }
+    }
+
     private updateUI(hp?: number, maxHp?: number) {
         if (!this.uiManager) return;
         
@@ -162,13 +188,7 @@ export class Game {
         const currentMaxHp = maxHp !== undefined ? maxHp : (this.player ? this.player.getMaxHp() : 100);
         const wave = this.enemyManager ? this.enemyManager.getWave() : 1;
         
-        this.uiManager.updateStats(
-            currentHp, 
-            currentMaxHp, 
-            this.score, 
-            this.highScore,
-            wave
-        );
+        this.uiManager.updateStats(currentHp, currentMaxHp, this.score, this.highScore, wave);
     }
 
     public start(): void {
@@ -247,6 +267,34 @@ export class Game {
                 const playerPos = this.player.getPosition();
                 this.playerModel.position.set(playerPos.x, playerPos.y - 1, playerPos.z);
                 this.playerModel.rotation.y = this.camera.rotation.y + Math.PI; 
+
+                // --- SISTEMA INTELIGENTE DE ANIMAÇÃO ---
+                if (this.isAttacking) {
+                    this.attackTimer -= deltaTime;
+                    if (this.attackTimer <= 0) {
+                        this.isAttacking = false;
+                        // Acabou o ataque, volta pra Idle ou Run suavemente
+                        if (this.currentAction && this.attackAction) {
+                            this.currentAction.reset().play();
+                            this.currentAction.crossFadeFrom(this.attackAction, 0.2, true);
+                        }
+                    }
+                } else if (this.animations.length > 0 && this.animationMixer) {
+                    const isMoving = Math.abs(this.inputManager.getMovementX()) > 0.1 || Math.abs(this.inputManager.getMovementZ()) > 0.1;
+                    const targetAnimName = isMoving ? 'Run' : 'Idle';
+
+                    if (!this.currentAction || this.currentAction.getClip().name !== targetAnimName) {
+                        const targetClip = this.animations.find(a => a.name === targetAnimName);
+                        if (targetClip) {
+                            const newAction = this.animationMixer.clipAction(targetClip);
+                            newAction.reset().play();
+                            if (this.currentAction) {
+                                newAction.crossFadeFrom(this.currentAction, 0.2, true);
+                            }
+                            this.currentAction = newAction;
+                        }
+                    }
+                }
             }
 
             this.enemyManager.update(
@@ -328,5 +376,3 @@ export class Game {
         this.renderer.render(this.scene, this.camera);
     }
 }
-
-
