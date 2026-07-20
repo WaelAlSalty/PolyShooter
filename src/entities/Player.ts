@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+﻿import * as THREE from 'three';
 
 export interface Bullet {
     mesh: THREE.Mesh;
@@ -43,6 +43,7 @@ export class Player {
         const geo = new THREE.BoxGeometry(1, 2, 1);
         const mat = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
         this.mesh = new THREE.Mesh(geo, mat);
+        this.mesh.visible = false; // <-- Hitbox invisivel
         this.mesh.position.y = 1;
         this.mesh.castShadow = true;
         this.mesh.receiveShadow = true;
@@ -60,6 +61,7 @@ export class Player {
         this.mesh.add(this.shieldMesh);
 
         this.gunGroup = new THREE.Group();
+        this.gunGroup.visible = false; // <-- Arma velha invisivel
         
         const barrelGeo = new THREE.BoxGeometry(0.2, 0.2, 0.8);
         const barrelMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
@@ -272,3 +274,4 @@ export class Player {
         }
     }
 }
+
