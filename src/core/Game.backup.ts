@@ -112,9 +112,6 @@ export class Game {
     }
 
     private destroy(): void {
-        if (this.inputManager) {
-            this.inputManager.cleanup();
-        }
         if (this.renderer) {
             this.renderer.dispose();
             this.renderer.forceContextLoss();

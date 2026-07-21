@@ -9,25 +9,42 @@ export class InputManager {
     private camDeltaX: number = 0;
     private camDeltaY: number = 0;
 
+    private keydownHandler: (e: KeyboardEvent) => void;
+    private keyupHandler: (e: KeyboardEvent) => void;
+    private mousedownHandler: (e: MouseEvent) => void;
+    private mouseupHandler: () => void;
+
     constructor() {
-        window.addEventListener('keydown', (e) => {
+        this.keydownHandler = (e: KeyboardEvent) => {
             this.keys[e.code] = true;
             if (e.code === 'Space') this.jumpReady = true;
             if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.dashReady = true;
-        });
+        };
         
-        window.addEventListener('keyup', (e) => {
+        this.keyupHandler = (e: KeyboardEvent) => {
             this.keys[e.code] = false;
-        });
+        };
 
-        window.addEventListener('mousedown', (e) => {
+        this.mousedownHandler = (e: MouseEvent) => {
             if ((e.target as HTMLElement).tagName === 'BUTTON') return;
             this.shoot = true;
-        });
+        };
         
-        window.addEventListener('mouseup', () => {
+        this.mouseupHandler = () => {
             this.shoot = false;
-        });
+        };
+
+        window.addEventListener('keydown', this.keydownHandler);
+        window.addEventListener('keyup', this.keyupHandler);
+        window.addEventListener('mousedown', this.mousedownHandler);
+        window.addEventListener('mouseup', this.mouseupHandler);
+    }
+
+    public cleanup(): void {
+        window.removeEventListener('keydown', this.keydownHandler);
+        window.removeEventListener('keyup', this.keyupHandler);
+        window.removeEventListener('mousedown', this.mousedownHandler);
+        window.removeEventListener('mouseup', this.mouseupHandler);
     }
 
     public setMovement(x: number, z: number) {
