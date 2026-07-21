@@ -115,6 +115,12 @@ export class Game {
         if (this.inputManager) {
             this.inputManager.cleanup();
         }
+        if (this.world) {
+            this.world.cleanup();
+        }
+        if (this.uiManager) {
+            this.uiManager.cleanup();
+        }
         if (this.renderer) {
             this.renderer.dispose();
             this.renderer.forceContextLoss();

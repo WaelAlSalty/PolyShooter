@@ -6,6 +6,7 @@ export class MobileUIManager {
     private gameOverDiv: HTMLDivElement;
     private controlsDiv: HTMLDivElement;
     private dragArea: HTMLDivElement;
+    private eventHandlers: Array<{element: HTMLElement | Window, event: string, handler: EventListener}> = [];
 
     constructor(private inputManager: InputManager, private onRestart: () => void) {
         this.container = document.createElement('div');
@@ -289,5 +290,18 @@ export class MobileUIManager {
     public showGameOver() {
         this.gameOverDiv.style.display = 'block';
         this.controlsDiv.style.display = 'none';
+    }
+
+    public cleanup(): void {
+        // Remove all event listeners
+        this.eventHandlers.forEach(({element, event, handler}) => {
+            element.removeEventListener(event, handler);
+        });
+        this.eventHandlers = [];
+
+        // Remove the container from DOM
+        if (this.container && this.container.parentNode) {
+            this.container.parentNode.removeChild(this.container);
+        }
     }
 }
